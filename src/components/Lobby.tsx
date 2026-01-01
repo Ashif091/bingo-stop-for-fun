@@ -83,6 +83,12 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error }: LobbyProps) {
           transition={{ delay: 0.2, type: 'spring' }}
           className="text-center mb-6 sm:mb-8"
         >
+          {/* Logo Image */}
+          <img
+            src="/bongo-logo.svg"
+            alt="Bingo Logo"
+            className="w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-4 drop-shadow-2xl"
+          />
           <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-full border border-purple-500/30 mb-3 sm:mb-4">
             <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-purple-400" />
             <span className="text-purple-300 text-xs sm:text-sm font-medium">Multiplayer Game</span>

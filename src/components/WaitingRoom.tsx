@@ -1,7 +1,7 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { Users, Play, Loader2, Copy, Check, Sparkles, X, Trophy } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Users, Play, Loader2, Copy, Check, Sparkles, X, Trophy, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { Player, GamePhase } from '@/types/game';
 
@@ -31,6 +31,7 @@ export default function WaitingRoom({
   onKickPlayer,
 }: WaitingRoomProps) {
   const [copied, setCopied] = useState(false);
+  const [showScoreboard, setShowScoreboard] = useState(false);
   const isHost = players[0]?.id === myPlayerId;
   const canStartArranging = players.length >= 2 && phase === 'waiting';
   const allReady = players.every(p => p.isReady);
@@ -94,23 +95,53 @@ export default function WaitingRoom({
             </div>
           </div>
 
-          {/* Scoreboard (if there are scores) */}
+          {/* Scoreboard (collapsible button bar) */}
           {hasScores && (
-            <div className="mb-6 p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20">
-              <div className="flex items-center gap-2 mb-2">
-                <Trophy className="w-4 h-4 text-yellow-400" />
-                <label className="text-sm font-medium text-yellow-400">Scoreboard</label>
-              </div>
-              <div className="space-y-1">
-                {Object.entries(scores)
-                  .sort(([, a], [, b]) => b - a)
-                  .map(([name, wins]) => (
-                    <div key={name} className="flex items-center justify-between text-sm">
-                      <span className="text-white">{name}</span>
-                      <span className="text-yellow-400 font-medium">{wins} win{wins !== 1 ? 's' : ''}</span>
+            <div className="mb-6">
+              <button
+                onClick={() => setShowScoreboard(!showScoreboard)}
+                className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20 hover:from-yellow-500/15 hover:to-amber-500/15 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-yellow-400" />
+                  <span className="text-sm font-medium text-yellow-400">Scoreboard</span>
+                  <span className="text-xs text-yellow-400/60 ml-1">
+                    ({Object.keys(scores).length} player{Object.keys(scores).length !== 1 ? 's' : ''})
+                  </span>
+                </div>
+                {showScoreboard ? (
+                  <ChevronUp className="w-4 h-4 text-yellow-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-yellow-400" />
+                )}
+              </button>
+              
+              <AnimatePresence>
+                {showScoreboard && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-3 pt-2 space-y-1 bg-slate-800/30 rounded-b-xl border-x border-b border-yellow-500/20">
+                      {Object.entries(scores)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([name, wins], idx) => (
+                          <div key={name} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              {idx === 0 && <span>🥇</span>}
+                              {idx === 1 && <span>🥈</span>}
+                              {idx === 2 && <span>🥉</span>}
+                              <span className="text-white">{name}</span>
+                            </div>
+                            <span className="text-yellow-400 font-medium">{wins} win{wins !== 1 ? 's' : ''}</span>
+                          </div>
+                        ))}
                     </div>
-                  ))}
-              </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 
