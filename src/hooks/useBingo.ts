@@ -162,6 +162,7 @@ export function useBingo(): UseBingoReturn {
         phase: 'ended',
         winners: payload.winners,
         players: payload.players,
+        scores: payload.scores,
       } : null);
     });
 

@@ -73,6 +73,7 @@ export interface NumberMarkedPayload {
 export interface GameOverPayload {
   winners: Player[];
   players: Player[]; // All players with revealed line counts
+  scores: Record<string, number>; // Player name → win count
 }
 
 export interface PlayerWonPayload {
