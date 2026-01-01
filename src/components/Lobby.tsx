@@ -23,15 +23,16 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error }: LobbyProps) {
 
   // Check backend status on mount (for Render free tier cold start)
   useEffect(() => {
+    let isMounted = true;
+    let retryInterval: NodeJS.Timeout | null = null;
+    
     const checkBackendStatus = async () => {
       const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
       if (!socketUrl) {
         // Local development - assume backend is always up
-        setBackendStatus('online');
-        return;
+        if (isMounted) setBackendStatus('online');
+        return true; // Success
       }
-
-      setBackendStatus('checking');
       
       try {
         // Ping the backend to wake it up
@@ -40,34 +41,50 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error }: LobbyProps) {
           mode: 'cors',
         });
         
-        if (response.ok) {
+        if (response.ok && isMounted) {
           setBackendStatus('online');
-        } else {
+          return true; // Success
+        } else if (isMounted) {
           setBackendStatus('offline');
+          return false;
         }
       } catch {
         // If fetch fails, try a simple HEAD request or retry
         try {
           await fetch(socketUrl, { method: 'HEAD', mode: 'no-cors' });
           // With no-cors we can't read the response, but if no error, server responded
-          setBackendStatus('online');
+          if (isMounted) setBackendStatus('online');
+          return true;
         } catch {
-          setBackendStatus('offline');
+          if (isMounted) setBackendStatus('offline');
+          return false;
         }
       }
+      return false;
     };
 
-    checkBackendStatus();
-    
-    // Retry every 3 seconds if offline or checking
-    const interval = setInterval(() => {
-      if (backendStatus !== 'online') {
-        checkBackendStatus();
+    const startChecking = async () => {
+      const success = await checkBackendStatus();
+      
+      if (!success && isMounted) {
+        // Retry every 3 seconds until online
+        retryInterval = setInterval(async () => {
+          const result = await checkBackendStatus();
+          if (result && retryInterval) {
+            clearInterval(retryInterval);
+            retryInterval = null;
+          }
+        }, 3000);
       }
-    }, 3000);
+    };
+    
+    startChecking();
 
-    return () => clearInterval(interval);
-  }, [backendStatus]);
+    return () => {
+      isMounted = false;
+      if (retryInterval) clearInterval(retryInterval);
+    };
+  }, []);
   const [hasSavedName, setHasSavedName] = useState(false);
 
   // Load saved name from localStorage on mount
@@ -133,12 +150,6 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error }: LobbyProps) {
           transition={{ delay: 0.2, type: 'spring' }}
           className="text-center mb-6 sm:mb-8"
         >
-          {/* Logo Image */}
-          <img
-            src="/bongo-logo.svg"
-            alt="Bingo Logo"
-            className="w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-4 drop-shadow-2xl"
-          />
           <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-full border border-purple-500/30 mb-3 sm:mb-4">
             <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-purple-400" />
             <span className="text-purple-300 text-xs sm:text-sm font-medium">Multiplayer Game</span>
