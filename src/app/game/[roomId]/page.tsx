@@ -9,14 +9,15 @@ import GridArrangement from '@/components/GridArrangement';
 import PlayerList from '@/components/PlayerList';
 import WinnerModal from '@/components/WinnerModal';
 import WaitingRoom from '@/components/WaitingRoom';
-import { motion } from 'framer-motion';
-import { Loader2, Users, ChevronUp, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Loader2, Users, ChevronUp, ChevronDown, Trophy } from 'lucide-react';
 
 export default function GamePage() {
   const params = useParams();
   const router = useRouter();
   const roomId = params.roomId as string;
   const [showPlayers, setShowPlayers] = useState(false); // Mobile: toggle player list
+  const [showScoreboard, setShowScoreboard] = useState(false); // Toggle scoreboard
 
   const {
     gameState,
@@ -412,6 +413,59 @@ export default function GamePage() {
                 </div>
               </div>
             )}
+
+            {/* Mobile: Scoreboard below grid */}
+            {Object.keys(gameState.scores).length > 0 && (
+              <div className="lg:hidden mt-3">
+                <button
+                  onClick={() => setShowScoreboard(!showScoreboard)}
+                  className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20 hover:from-yellow-500/15 hover:to-amber-500/15 transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-yellow-400" />
+                    <span className="text-sm font-medium text-yellow-400">Room Scoreboard</span>
+                    <span className="text-xs text-yellow-400/60 ml-1">
+                      ({Object.keys(gameState.scores).length} player{Object.keys(gameState.scores).length !== 1 ? 's' : ''})
+                    </span>
+                  </div>
+                  {showScoreboard ? (
+                    <ChevronUp className="w-4 h-4 text-yellow-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-yellow-400" />
+                  )}
+                </button>
+                
+                <AnimatePresence>
+                  {showScoreboard && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-3 pt-2 space-y-1 bg-slate-800/30 rounded-b-xl border-x border-b border-yellow-500/20">
+                        {Object.entries(gameState.scores)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([name, wins], idx) => (
+                            <div key={name} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-2">
+                                {idx === 0 && <span>🥇</span>}
+                                {idx === 1 && <span>🥈</span>}
+                                {idx === 2 && <span>🥉</span>}
+                                <span className="text-white">{name}</span>
+                                {name === myPlayer?.name && (
+                                  <span className="text-xs px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded">You</span>
+                                )}
+                              </div>
+                              <span className="text-yellow-400 font-medium">{wins} win{wins !== 1 ? 's' : ''}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </motion.div>
 
           {/* Desktop: Sidebar */}
@@ -453,6 +507,59 @@ export default function GamePage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Desktop: Room Scoreboard */}
+            {Object.keys(gameState.scores).length > 0 && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowScoreboard(!showScoreboard)}
+                  className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20 hover:from-yellow-500/15 hover:to-amber-500/15 transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-yellow-400" />
+                    <span className="text-sm font-medium text-yellow-400">Room Scoreboard</span>
+                    <span className="text-xs text-yellow-400/60 ml-1">
+                      ({Object.keys(gameState.scores).length})
+                    </span>
+                  </div>
+                  {showScoreboard ? (
+                    <ChevronUp className="w-4 h-4 text-yellow-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-yellow-400" />
+                  )}
+                </button>
+                
+                <AnimatePresence>
+                  {showScoreboard && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-3 pt-2 space-y-1 bg-slate-800/30 rounded-b-xl border-x border-b border-yellow-500/20">
+                        {Object.entries(gameState.scores)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([name, wins], idx) => (
+                            <div key={name} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-2">
+                                {idx === 0 && <span>🥇</span>}
+                                {idx === 1 && <span>🥈</span>}
+                                {idx === 2 && <span>🥉</span>}
+                                <span className="text-white">{name}</span>
+                                {name === myPlayer?.name && (
+                                  <span className="text-xs px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded">You</span>
+                                )}
+                              </div>
+                              <span className="text-yellow-400 font-medium">{wins} win{wins !== 1 ? 's' : ''}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             )}
           </motion.div>
