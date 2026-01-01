@@ -20,9 +20,16 @@ export interface GameState {
   currentTurnIndex: number; // Index of player whose turn it is
   phase: GamePhase;
   winners: Player[]; // Ordered: 1st, 2nd, 3rd place
+  maxPlayers: number; // Host-configured player limit (2-10)
 }
 
 // Socket event payloads
+export interface CreateRoomPayload {
+  roomId: string;
+  playerName: string;
+  maxPlayers: number;
+}
+
 export interface JoinRoomPayload {
   roomId: string;
   playerName: string;
@@ -99,6 +106,7 @@ export interface ErrorPayload {
 // Socket event names as constants for type safety
 export const SOCKET_EVENTS = {
   // Client to Server
+  CREATE_ROOM: 'create-room',
   JOIN_ROOM: 'join-room',
   LEAVE_ROOM: 'leave-room',
   START_ARRANGING: 'start-arranging',

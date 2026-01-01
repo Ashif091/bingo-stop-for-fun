@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { 
   GameState, 
   Player, 
+  CreateRoomPayload,
   JoinRoomPayload, 
   PlaceNumberPayload,
   MarkNumberPayload,
@@ -28,6 +29,11 @@ function createEmptyGrid(): number[][] {
 export function initializeSocketHandlers(io: SocketIOServer) {
   io.on('connection', (socket: Socket) => {
     console.log(`Client connected: ${socket.id}`);
+
+    // Handle creating a room (host sets player limit)
+    socket.on(SOCKET_EVENTS.CREATE_ROOM, (payload: CreateRoomPayload) => {
+      handleCreateRoom(io, socket, payload);
+    });
 
     // Handle joining a room
     socket.on(SOCKET_EVENTS.JOIN_ROOM, (payload: JoinRoomPayload) => {
@@ -72,6 +78,55 @@ export function initializeSocketHandlers(io: SocketIOServer) {
   });
 }
 
+function handleCreateRoom(io: SocketIOServer, socket: Socket, payload: CreateRoomPayload) {
+  const { roomId, playerName, maxPlayers } = payload;
+
+  // Check if this socket already joined a room
+  if (socketToRoom.has(socket.id)) {
+    console.log(`Socket ${socket.id} already in a room, ignoring`);
+    return;
+  }
+
+  // Check if room already exists
+  if (rooms.has(roomId)) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room already exists. Try a different ID or join.' });
+    return;
+  }
+
+  // Create new room with host's settings
+  const gameState: GameState = {
+    roomId,
+    players: [],
+    markedNumbers: [],
+    currentTurnIndex: 0,
+    phase: 'waiting',
+    winners: [],
+    maxPlayers: Math.max(2, Math.min(10, maxPlayers)), // Clamp between 2-10
+  };
+  rooms.set(roomId, gameState);
+
+  // Create host player
+  const player: Player = {
+    id: socket.id,
+    name: playerName,
+    grid: createEmptyGrid(),
+    completedLines: 0,
+    isReady: false,
+    currentPlacement: 1,
+  };
+
+  gameState.players.push(player);
+  socketToRoom.set(socket.id, roomId);
+  socket.join(roomId);
+
+  socket.emit(SOCKET_EVENTS.ROOM_JOINED, {
+    gameState,
+    playerId: socket.id,
+  });
+
+  console.log(`Room ${roomId} created by ${playerName} (max: ${gameState.maxPlayers} players)`);
+}
+
 function handleJoinRoom(io: SocketIOServer, socket: Socket, payload: JoinRoomPayload) {
   const { roomId, playerName } = payload;
 
@@ -81,20 +136,12 @@ function handleJoinRoom(io: SocketIOServer, socket: Socket, payload: JoinRoomPay
     return;
   }
 
-  // Get or create room
-  let gameState = rooms.get(roomId);
+  // Room must exist (created by host first)
+  const gameState = rooms.get(roomId);
   
   if (!gameState) {
-    // Create new room
-    gameState = {
-      roomId,
-      players: [],
-      markedNumbers: [],
-      currentTurnIndex: 0,
-      phase: 'waiting',
-      winners: [],
-    };
-    rooms.set(roomId, gameState);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room not found. Check the Room ID or create a new room.' });
+    return;
   }
 
   // Check if player with same socket id already exists
@@ -109,9 +156,9 @@ function handleJoinRoom(io: SocketIOServer, socket: Socket, payload: JoinRoomPay
     return;
   }
 
-  // Check if room is full (max 10 players for bingo)
-  if (gameState.players.length >= 10) {
-    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room is full' });
+  // Check if room is full (use host's maxPlayers setting)
+  if (gameState.players.length >= gameState.maxPlayers) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: `Room is full (${gameState.maxPlayers} players max)` });
     return;
   }
 

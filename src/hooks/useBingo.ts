@@ -30,6 +30,7 @@ interface UseBingoReturn {
   completedLinePositions: Set<string>;
   
   // Actions
+  createRoom: (roomId: string, playerName: string, maxPlayers: number) => void;
   joinRoom: (roomId: string, playerName: string) => void;
   leaveRoom: () => void;
   startArranging: () => void;
@@ -182,6 +183,18 @@ export function useBingo(): UseBingoReturn {
     };
   }, []);
 
+  const createRoom = useCallback((roomId: string, playerName: string, maxPlayers: number) => {
+    // Prevent double calls from React StrictMode
+    if (hasJoinedRef.current) {
+      console.log('Already in a room, skipping duplicate create');
+      return;
+    }
+    hasJoinedRef.current = true;
+    
+    const socket = getSocket();
+    socket.emit(SOCKET_EVENTS.CREATE_ROOM, { roomId, playerName, maxPlayers });
+  }, []);
+
   const joinRoom = useCallback((roomId: string, playerName: string) => {
     // Prevent double joins from React StrictMode
     if (hasJoinedRef.current) {
@@ -254,6 +267,7 @@ export function useBingo(): UseBingoReturn {
     error,
     isConnected,
     completedLinePositions,
+    createRoom,
     joinRoom,
     leaveRoom,
     startArranging,

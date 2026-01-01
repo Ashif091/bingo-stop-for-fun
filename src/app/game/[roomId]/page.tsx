@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useBingo } from '@/hooks/useBingo';
 import GameHeader from '@/components/GameHeader';
@@ -10,12 +10,13 @@ import PlayerList from '@/components/PlayerList';
 import WinnerModal from '@/components/WinnerModal';
 import WaitingRoom from '@/components/WaitingRoom';
 import { motion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Users, ChevronUp, ChevronDown } from 'lucide-react';
 
 export default function GamePage() {
   const params = useParams();
   const router = useRouter();
   const roomId = params.roomId as string;
+  const [showPlayers, setShowPlayers] = useState(false); // Mobile: toggle player list
 
   const {
     gameState,
@@ -32,21 +33,42 @@ export default function GamePage() {
     startGame,
     markNumber,
     restartGame,
+    createRoom,
   } = useBingo();
 
-  // Get player name from sessionStorage or redirect to lobby
+  // Get player name from localStorage/sessionStorage or redirect to lobby
   useEffect(() => {
-    const playerName = sessionStorage.getItem('playerName');
+    let playerName = sessionStorage.getItem('playerName');
+    const isHost = sessionStorage.getItem('isHost') === 'true';
+    const maxPlayersStr = sessionStorage.getItem('maxPlayers');
+    const maxPlayers = maxPlayersStr ? parseInt(maxPlayersStr, 10) : 4;
+    
+    // Also check localStorage if sessionStorage is empty
+    if (!playerName) {
+      const savedName = localStorage.getItem('bingoPlayerName');
+      if (savedName) {
+        playerName = savedName;
+        sessionStorage.setItem('playerName', savedName);
+      }
+    }
+    
     if (!playerName) {
       router.push('/');
       return;
     }
 
-    // Join the room
+    // Join or create the room
     if (roomId && !gameState) {
-      joinRoom(roomId, playerName);
+      if (isHost) {
+        createRoom(roomId, playerName, maxPlayers);
+        // Clear host flags after creating
+        sessionStorage.removeItem('isHost');
+        sessionStorage.removeItem('maxPlayers');
+      } else {
+        joinRoom(roomId, playerName);
+      }
     }
-  }, [roomId, gameState, joinRoom, router]);
+  }, [roomId, gameState, joinRoom, createRoom, router]);
 
   const handleLeave = () => {
     leaveRoom();
@@ -74,7 +96,7 @@ export default function GamePage() {
     );
   }
 
-  // Waiting room or Arranging phase (with sidebar)
+  // Waiting room
   if (gameState.phase === 'waiting') {
     return (
       <WaitingRoom
@@ -108,19 +130,72 @@ export default function GamePage() {
         />
 
         {/* Main content */}
-        <main className="container mx-auto px-4 py-6 relative z-10">
+        <main className="container mx-auto px-2 sm:px-4 py-3 sm:py-6 relative z-10">
           {/* Error message */}
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-sm text-center"
+              className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-xs sm:text-sm text-center"
             >
               {error}
             </motion.div>
           )}
 
-          <div className="grid lg:grid-cols-[1fr_320px] gap-6 max-w-5xl mx-auto">
+          {/* Mobile: Collapsible Player Status */}
+          <div className="lg:hidden mb-3">
+            <button
+              onClick={() => setShowPlayers(!showPlayers)}
+              className="w-full flex items-center justify-between p-3 bg-slate-800/50 backdrop-blur-xl rounded-xl border border-slate-700/50"
+            >
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-purple-400" />
+                <span className="text-white text-sm font-medium">
+                  Players ({gameState.players.filter(p => p.isReady).length}/{gameState.players.length} ready)
+                </span>
+              </div>
+              {showPlayers ? (
+                <ChevronUp className="w-4 h-4 text-slate-400" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              )}
+            </button>
+            
+            {showPlayers && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mt-2 bg-slate-800/50 backdrop-blur-xl rounded-xl border border-slate-700/50 p-3"
+              >
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {gameState.players.map((player, index) => (
+                    <div
+                      key={player.id}
+                      className={`flex items-center justify-between p-2 rounded-lg text-sm ${
+                        player.isReady ? 'bg-green-500/10' : 'bg-slate-700/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-white">{player.name}</span>
+                        {player.id === playerId && (
+                          <span className="text-xs px-1 py-0.5 bg-purple-500/20 text-purple-300 rounded">You</span>
+                        )}
+                        {index === 0 && (
+                          <span className="text-xs px-1 py-0.5 bg-yellow-500/20 text-yellow-300 rounded">Host</span>
+                        )}
+                      </div>
+                      <span className={`text-xs ${player.isReady ? 'text-green-400' : 'text-slate-500'}`}>
+                        {player.isReady ? '✓' : `${player.currentPlacement - 1}/25`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          <div className="grid lg:grid-cols-[1fr_280px] gap-4 sm:gap-6 max-w-5xl mx-auto">
             {/* Grid Arrangement */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -133,18 +208,37 @@ export default function GamePage() {
                 isReady={myPlayer.isReady}
                 onPlaceNumber={placeNumber}
               />
+              
+              {/* Mobile: Host start button below grid */}
+              {gameState.players[0]?.id === playerId && (
+                <motion.button
+                  whileHover={{ scale: gameState.players.every(p => p.isReady) ? 1.02 : 1 }}
+                  whileTap={{ scale: gameState.players.every(p => p.isReady) ? 0.98 : 1 }}
+                  onClick={startGame}
+                  disabled={!gameState.players.every(p => p.isReady)}
+                  className={`
+                    lg:hidden w-full mt-4 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm
+                    ${gameState.players.every(p => p.isReady)
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-500/25'
+                      : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
+                    }
+                  `}
+                >
+                  {gameState.players.every(p => p.isReady) ? '🎮 Start Game!' : 'Waiting for all...'}
+                </motion.button>
+              )}
             </motion.div>
 
-            {/* Sidebar */}
+            {/* Desktop: Sidebar */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
-              className="space-y-4"
+              className="hidden lg:block space-y-4"
             >
               {/* Player status */}
               <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4">
-                <h3 className="font-semibold text-white mb-3">Players Status</h3>
+                <h3 className="font-semibold text-white mb-3 text-sm">Players Status</h3>
                 <div className="space-y-2">
                   {gameState.players.map((player, index) => (
                     <div
@@ -154,7 +248,7 @@ export default function GamePage() {
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-sm font-bold">
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
                           {player.name.charAt(0).toUpperCase()}
                         </div>
                         <span className="text-white text-sm">{player.name}</span>
@@ -181,7 +275,7 @@ export default function GamePage() {
                   onClick={startGame}
                   disabled={!gameState.players.every(p => p.isReady)}
                   className={`
-                    w-full py-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all
+                    w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm
                     ${gameState.players.every(p => p.isReady)
                       ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg shadow-green-500/25'
                       : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
@@ -216,19 +310,67 @@ export default function GamePage() {
       />
 
       {/* Main content */}
-      <main className="container mx-auto px-4 py-6 relative z-10">
+      <main className="container mx-auto px-2 sm:px-4 py-3 sm:py-6 relative z-10">
         {/* Error message */}
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-sm text-center"
+            className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-xs sm:text-sm text-center"
           >
             {error}
           </motion.div>
         )}
 
-        <div className="grid lg:grid-cols-[1fr_320px] gap-6 max-w-5xl mx-auto">
+        {/* Mobile: Compact Player Info Bar */}
+        <div className="lg:hidden mb-3">
+          <button
+            onClick={() => setShowPlayers(!showPlayers)}
+            className="w-full flex items-center justify-between p-2.5 bg-slate-800/50 backdrop-blur-xl rounded-xl border border-slate-700/50"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-purple-400" />
+                <span className="text-white text-sm font-medium">{gameState.players.length}</span>
+              </div>
+              <div className="h-4 w-px bg-slate-600" />
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <span>Turn:</span>
+                <span className={`font-medium ${isMyTurn ? 'text-green-400' : 'text-white'}`}>
+                  {isMyTurn ? 'You!' : gameState.players[gameState.currentTurnIndex]?.name}
+                </span>
+              </div>
+              <div className="h-4 w-px bg-slate-600" />
+              <span className="text-xs text-slate-400">
+                {gameState.markedNumbers.length}/25
+              </span>
+            </div>
+            {showPlayers ? (
+              <ChevronUp className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
+          
+          {showPlayers && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-2"
+            >
+              <PlayerList
+                players={gameState.players}
+                currentTurnIndex={gameState.currentTurnIndex}
+                myPlayerId={playerId}
+                phase={gameState.phase}
+                showAllLines={gameState.phase === 'ended'}
+              />
+            </motion.div>
+          )}
+        </div>
+
+        <div className="grid lg:grid-cols-[1fr_280px] gap-4 sm:gap-6 max-w-5xl mx-auto">
           {/* Bingo Grid */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -244,17 +386,33 @@ export default function GamePage() {
                 onMarkNumber={markNumber}
                 disabled={gameState.phase === 'ended'}
                 phase={gameState.phase}
-                showLines={true} // Show own lines
+                showLines={true}
                 myRank={myPlayer.rank}
               />
             )}
+            
+            {/* Mobile: Winners display */}
+            {gameState.winners.length > 0 && gameState.phase === 'playing' && (
+              <div className="lg:hidden mt-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20 p-3">
+                <div className="flex items-center gap-3 overflow-x-auto">
+                  <span className="text-yellow-400 text-xs font-medium whitespace-nowrap">Winners:</span>
+                  {gameState.winners.map((winner, idx) => (
+                    <span key={winner.id} className="flex items-center gap-1 text-sm whitespace-nowrap">
+                      <span>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                      <span className="text-white">{winner.name}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </motion.div>
 
-          {/* Sidebar */}
+          {/* Desktop: Sidebar */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
+            className="hidden lg:block"
           >
             <PlayerList
               players={gameState.players}
@@ -267,7 +425,7 @@ export default function GamePage() {
             {/* Marked numbers count */}
             <div className="mt-4 bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4">
               <div className="text-center">
-                <span className="text-3xl font-bold text-white">
+                <span className="text-2xl font-bold text-white">
                   {gameState.markedNumbers.length}
                 </span>
                 <span className="text-slate-400 text-sm block">
@@ -279,7 +437,7 @@ export default function GamePage() {
             {/* Winners so far */}
             {gameState.winners.length > 0 && gameState.phase === 'playing' && (
               <div className="mt-4 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-2xl border border-yellow-500/20 p-4">
-                <h4 className="font-semibold text-yellow-400 mb-2">Winners</h4>
+                <h4 className="font-semibold text-yellow-400 mb-2 text-sm">Winners</h4>
                 <div className="space-y-1">
                   {gameState.winners.map((winner, idx) => (
                     <div key={winner.id} className="flex items-center gap-2 text-sm">
