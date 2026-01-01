@@ -21,6 +21,7 @@ export interface GameState {
   phase: GamePhase;
   winners: Player[]; // Ordered: 1st, 2nd, 3rd place
   maxPlayers: number; // Host-configured player limit (2-10)
+  scores: Record<string, number>; // Player name → win count (persists across games)
 }
 
 // Socket event payloads
@@ -114,11 +115,13 @@ export const SOCKET_EVENTS = {
   START_GAME: 'start-game',
   MARK_NUMBER: 'mark-number',
   RESTART_GAME: 'restart-game',
+  KICK_PLAYER: 'kick-player',
   
   // Server to Client
   ROOM_JOINED: 'room-joined',
   PLAYER_JOINED: 'player-joined',
   PLAYER_LEFT: 'player-left',
+  PLAYER_KICKED: 'player-kicked',
   ARRANGING_STARTED: 'arranging-started',
   NUMBER_PLACED: 'number-placed',
   PLAYER_READY: 'player-ready',

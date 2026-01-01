@@ -28,11 +28,13 @@ interface UseBingoReturn {
   error: string | null;
   isConnected: boolean;
   completedLinePositions: Set<string>;
+  wasKicked: boolean; // True if player was kicked by host
   
   // Actions
   createRoom: (roomId: string, playerName: string, maxPlayers: number) => void;
   joinRoom: (roomId: string, playerName: string) => void;
   leaveRoom: () => void;
+  kickPlayer: (playerId: string) => void;
   startArranging: () => void;
   placeNumber: (row: number, col: number) => void;
   startGame: () => void;
@@ -47,6 +49,7 @@ export function useBingo(): UseBingoReturn {
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [completedLinePositions, setCompletedLinePositions] = useState<Set<string>>(new Set());
+  const [wasKicked, setWasKicked] = useState(false);
   
   // Prevent double joins from React StrictMode
   const hasJoinedRef = useRef(false);
@@ -166,12 +169,23 @@ export function useBingo(): UseBingoReturn {
       setError(payload.message);
     });
 
+    // Handle being kicked by host
+    socket.on(SOCKET_EVENTS.PLAYER_KICKED, (payload: { reason: string }) => {
+      setWasKicked(true);
+      setError(payload.reason);
+      setGameState(null);
+      setPlayerId(null);
+      hasJoinedRef.current = false;
+      disconnectSocket();
+    });
+
     return () => {
       socket.off('connect');
       socket.off('disconnect');
       socket.off(SOCKET_EVENTS.ROOM_JOINED);
       socket.off(SOCKET_EVENTS.PLAYER_JOINED);
       socket.off(SOCKET_EVENTS.PLAYER_LEFT);
+      socket.off(SOCKET_EVENTS.PLAYER_KICKED);
       socket.off(SOCKET_EVENTS.ARRANGING_STARTED);
       socket.off(SOCKET_EVENTS.NUMBER_PLACED);
       socket.off(SOCKET_EVENTS.PLAYER_READY);
@@ -215,6 +229,15 @@ export function useBingo(): UseBingoReturn {
     setPlayerId(null);
     disconnectSocket();
   }, []);
+
+  const kickPlayer = useCallback((targetPlayerId: string) => {
+    if (!gameState) return;
+    const socket = getSocket();
+    socket.emit(SOCKET_EVENTS.KICK_PLAYER, {
+      roomId: gameState.roomId,
+      playerId: targetPlayerId,
+    });
+  }, [gameState]);
 
   const startArranging = useCallback(() => {
     if (!gameState) return;
@@ -267,9 +290,11 @@ export function useBingo(): UseBingoReturn {
     error,
     isConnected,
     completedLinePositions,
+    wasKicked,
     createRoom,
     joinRoom,
     leaveRoom,
+    kickPlayer,
     startArranging,
     placeNumber,
     startGame,

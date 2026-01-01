@@ -26,8 +26,10 @@ export default function GamePage() {
     error,
     isConnected,
     completedLinePositions,
+    wasKicked,
     joinRoom,
     leaveRoom,
+    kickPlayer,
     startArranging,
     placeNumber,
     startGame,
@@ -73,7 +75,8 @@ export default function GamePage() {
   const handleLeave = () => {
     leaveRoom();
     sessionStorage.removeItem('playerName');
-    router.push('/');
+    // Use window.location for full refresh
+    window.location.href = '/';
   };
 
   const handlePlayAgain = () => {
@@ -104,9 +107,12 @@ export default function GamePage() {
         players={gameState.players}
         myPlayerId={playerId}
         phase={gameState.phase}
+        scores={gameState.scores}
+        maxPlayers={gameState.maxPlayers}
         onStartArranging={startArranging}
         onStartGame={startGame}
         onLeave={handleLeave}
+        onKickPlayer={kickPlayer}
       />
     );
   }
@@ -388,6 +394,7 @@ export default function GamePage() {
                 phase={gameState.phase}
                 showLines={true}
                 myRank={myPlayer.rank}
+                currentPlayerName={gameState.players[gameState.currentTurnIndex]?.name}
               />
             )}
             

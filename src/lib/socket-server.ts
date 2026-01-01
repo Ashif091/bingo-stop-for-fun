@@ -45,6 +45,11 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       handleLeaveRoom(io, socket);
     });
 
+    // Handle kicking a player (host only)
+    socket.on(SOCKET_EVENTS.KICK_PLAYER, (payload: { roomId: string; playerId: string }) => {
+      handleKickPlayer(io, socket, payload);
+    });
+
     // Handle starting the arranging phase
     socket.on(SOCKET_EVENTS.START_ARRANGING, (roomId: string) => {
       handleStartArranging(io, socket, roomId);
@@ -102,6 +107,7 @@ function handleCreateRoom(io: SocketIOServer, socket: Socket, payload: CreateRoo
     phase: 'waiting',
     winners: [],
     maxPlayers: Math.max(2, Math.min(10, maxPlayers)), // Clamp between 2-10
+    scores: {}, // Initialize empty scoreboard
   };
   rooms.set(roomId, gameState);
 
@@ -147,6 +153,12 @@ function handleJoinRoom(io: SocketIOServer, socket: Socket, payload: JoinRoomPay
   // Check if player with same socket id already exists
   if (gameState.players.some(p => p.id === socket.id)) {
     console.log(`Player ${socket.id} already in room, ignoring duplicate`);
+    return;
+  }
+
+  // *** NEW: Check if name already exists in room ***
+  if (gameState.players.some(p => p.name.toLowerCase() === playerName.toLowerCase())) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Name already taken. Please use a different name.' });
     return;
   }
 
@@ -233,6 +245,68 @@ function handleLeaveRoom(io: SocketIOServer, socket: Socket) {
   });
 
   console.log(`Player ${socket.id} left room ${roomId}`);
+}
+
+// *** NEW: Handle kicking a player ***
+function handleKickPlayer(io: SocketIOServer, socket: Socket, payload: { roomId: string; playerId: string }) {
+  const { roomId, playerId } = payload;
+
+  const gameState = rooms.get(roomId);
+  if (!gameState) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room not found' });
+    return;
+  }
+
+  // Only host can kick
+  if (gameState.players[0]?.id !== socket.id) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only the host can kick players' });
+    return;
+  }
+
+  // Can only kick in waiting phase
+  if (gameState.phase !== 'waiting') {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Can only kick players before the game starts' });
+    return;
+  }
+
+  // Can't kick yourself
+  if (playerId === socket.id) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Cannot kick yourself' });
+    return;
+  }
+
+  // Find the player to kick
+  const playerIndex = gameState.players.findIndex(p => p.id === playerId);
+  if (playerIndex === -1) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Player not found' });
+    return;
+  }
+
+  const kickedPlayer = gameState.players[playerIndex];
+
+  // Remove player
+  gameState.players.splice(playerIndex, 1);
+  socketToRoom.delete(playerId);
+
+  // Notify kicked player
+  io.to(playerId).emit(SOCKET_EVENTS.PLAYER_KICKED, {
+    reason: 'You were removed by the host',
+  });
+
+  // Make kicked player leave the socket room
+  const kickedSocket = io.sockets.sockets.get(playerId);
+  if (kickedSocket) {
+    kickedSocket.leave(roomId);
+  }
+
+  // Notify remaining players
+  io.to(roomId).emit(SOCKET_EVENTS.PLAYER_LEFT, {
+    playerId,
+    players: gameState.players,
+    currentTurnIndex: gameState.currentTurnIndex,
+  });
+
+  console.log(`Player ${kickedPlayer.name} was kicked from room ${roomId}`);
 }
 
 function handleStartArranging(io: SocketIOServer, socket: Socket, roomId: string) {
@@ -416,13 +490,39 @@ function handleMarkNumber(io: SocketIOServer, socket: Socket, payload: MarkNumbe
     player.completedLines = calculateCompletedLines(player.grid, gameState.markedNumbers);
   });
 
-  // Check for new winners (first to 5 lines who isn't already a winner)
+  // *** PRIORITY WINNING: Clicker gets 1st if they reach 5 lines ***
   const maxWinners = gameState.players.length <= 2 ? 1 : 3;
+  const clickerId = playerId; // The person who clicked
   
-  gameState.players.forEach(player => {
-    if (player.completedLines >= 5 && !player.rank && gameState.winners.length < maxWinners) {
+  // Find all players who just reached 5 lines
+  const newFiveLiners = gameState.players.filter(
+    p => p.completedLines >= 5 && !p.rank && gameState.winners.length < maxWinners
+  );
+
+  if (newFiveLiners.length > 0) {
+    // Check if clicker is among the new 5-liners
+    const clickerAmongWinners = newFiveLiners.find(p => p.id === clickerId);
+    
+    // Sort: clicker first, then randomize others
+    const otherWinners = newFiveLiners.filter(p => p.id !== clickerId);
+    shuffleArray(otherWinners);
+    
+    const orderedNewWinners = clickerAmongWinners 
+      ? [clickerAmongWinners, ...otherWinners]
+      : otherWinners;
+
+    // Assign ranks
+    for (const player of orderedNewWinners) {
+      if (gameState.winners.length >= maxWinners) break;
+      
       player.rank = gameState.winners.length + 1;
       gameState.winners.push({ ...player });
+      
+      // *** UPDATE SCOREBOARD ***
+      if (!gameState.scores[player.name]) {
+        gameState.scores[player.name] = 0;
+      }
+      gameState.scores[player.name]++;
       
       // Notify about new winner
       io.to(roomId).emit(SOCKET_EVENTS.PLAYER_WON, {
@@ -432,7 +532,7 @@ function handleMarkNumber(io: SocketIOServer, socket: Socket, payload: MarkNumbe
       
       console.log(`Player ${player.name} got ${getOrdinal(player.rank)} place in room ${roomId}!`);
     }
-  });
+  }
 
   // Move to next turn (skip winners)
   do {
@@ -456,10 +556,11 @@ function handleMarkNumber(io: SocketIOServer, socket: Socket, payload: MarkNumbe
       players: gameState.players, // All lines revealed now
     });
     
-    // Then notify game over with full reveal
+    // Then notify game over with full reveal and scores
     io.to(roomId).emit(SOCKET_EVENTS.GAME_OVER, {
       winners: gameState.winners,
       players: gameState.players,
+      scores: gameState.scores,
     });
 
     console.log(`Game ended in room ${roomId}!`);
@@ -467,7 +568,6 @@ function handleMarkNumber(io: SocketIOServer, socket: Socket, payload: MarkNumbe
   }
 
   // Notify all players about the number marked
-  // Hide line counts from other players (they only see their own)
   io.to(roomId).emit(SOCKET_EVENTS.NUMBER_MARKED, {
     number,
     markedNumbers: gameState.markedNumbers,
@@ -491,7 +591,7 @@ function handleRestartGame(io: SocketIOServer, socket: Socket, roomId: string) {
   gameState.markedNumbers = [];
   gameState.winners = [];
 
-  // Reset all players
+  // Reset all players (but keep scores!)
   gameState.players.forEach(player => {
     player.grid = createEmptyGrid();
     player.isReady = false;
@@ -512,4 +612,12 @@ function getOrdinal(n: number): string {
   const suffixes = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
   return n + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
+}
+
+// Fisher-Yates shuffle
+function shuffleArray<T>(array: T[]): void {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
 }

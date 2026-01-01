@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Users, Play, Loader2, Copy, Check, Sparkles } from 'lucide-react';
+import { Users, Play, Loader2, Copy, Check, Sparkles, X, Trophy } from 'lucide-react';
 import { useState } from 'react';
 import { Player, GamePhase } from '@/types/game';
 
@@ -10,9 +10,12 @@ interface WaitingRoomProps {
   players: Player[];
   myPlayerId: string;
   phase: GamePhase;
+  scores?: Record<string, number>;
+  maxPlayers?: number;
   onStartArranging: () => void;
   onStartGame: () => void;
   onLeave: () => void;
+  onKickPlayer?: (playerId: string) => void;
 }
 
 export default function WaitingRoom({
@@ -20,15 +23,21 @@ export default function WaitingRoom({
   players,
   myPlayerId,
   phase,
+  scores = {},
+  maxPlayers = 10,
   onStartArranging,
   onStartGame,
   onLeave,
+  onKickPlayer,
 }: WaitingRoomProps) {
   const [copied, setCopied] = useState(false);
   const isHost = players[0]?.id === myPlayerId;
   const canStartArranging = players.length >= 2 && phase === 'waiting';
   const allReady = players.every(p => p.isReady);
   const canStartGame = allReady && phase === 'arranging';
+
+  // Check if there are any scores to show
+  const hasScores = Object.keys(scores).length > 0;
 
   const copyRoomId = async () => {
     await navigator.clipboard.writeText(roomId);
@@ -85,12 +94,32 @@ export default function WaitingRoom({
             </div>
           </div>
 
+          {/* Scoreboard (if there are scores) */}
+          {hasScores && (
+            <div className="mb-6 p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20">
+              <div className="flex items-center gap-2 mb-2">
+                <Trophy className="w-4 h-4 text-yellow-400" />
+                <label className="text-sm font-medium text-yellow-400">Scoreboard</label>
+              </div>
+              <div className="space-y-1">
+                {Object.entries(scores)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([name, wins]) => (
+                    <div key={name} className="flex items-center justify-between text-sm">
+                      <span className="text-white">{name}</span>
+                      <span className="text-yellow-400 font-medium">{wins} win{wins !== 1 ? 's' : ''}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
           {/* Players list */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <label className="text-sm text-slate-400 flex items-center gap-2">
                 <Users className="w-4 h-4" />
-                Players ({players.length}/10)
+                Players ({players.length}/{maxPlayers})
               </label>
             </div>
             
@@ -119,6 +148,12 @@ export default function WaitingRoom({
                           Host
                         </span>
                       )}
+                      {/* Show score if they have one */}
+                      {scores[player.name] && (
+                        <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded-full">
+                          {scores[player.name]}🏆
+                        </span>
+                      )}
                     </div>
                     {phase === 'arranging' && (
                       <span className={`text-xs ${player.isReady ? 'text-green-400' : 'text-slate-500'}`}>
@@ -128,6 +163,18 @@ export default function WaitingRoom({
                   </div>
                   {phase === 'arranging' && player.isReady && (
                     <Sparkles className="w-5 h-5 text-green-400" />
+                  )}
+                  {/* Kick button (host only, waiting phase, not self) */}
+                  {isHost && phase === 'waiting' && player.id !== myPlayerId && onKickPlayer && (
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => onKickPlayer(player.id)}
+                      className="p-1.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 transition-all"
+                      title="Remove player"
+                    >
+                      <X className="w-4 h-4" />
+                    </motion.button>
                   )}
                 </motion.div>
               ))}

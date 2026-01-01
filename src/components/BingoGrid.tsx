@@ -13,6 +13,7 @@ interface BingoGridProps {
   phase: GamePhase;
   showLines?: boolean; // Whether to show completed lines
   myRank?: number; // Player's winning rank
+  currentPlayerName?: string; // Name of player whose turn it is
 }
 
 export default function BingoGrid({
@@ -25,6 +26,7 @@ export default function BingoGrid({
   phase,
   showLines = true,
   myRank,
+  currentPlayerName,
 }: BingoGridProps) {
   const markedSet = new Set(markedNumbers);
 
@@ -36,6 +38,27 @@ export default function BingoGrid({
 
   return (
     <div className="relative">
+      {/* Turn status indicator - ABOVE the grid */}
+      {phase === 'playing' && !myRank && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-3 text-center"
+        >
+          {isMyTurn && !disabled ? (
+            <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-full border border-green-500/30">
+              <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+              <span className="text-green-400 font-medium">Your turn! Pick a number.</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700/30 rounded-full border border-slate-600/30">
+              <span className="w-2 h-2 bg-slate-400 rounded-full" />
+              <span className="text-slate-400">Waiting for {currentPlayerName || 'opponent'}...</span>
+            </span>
+          )}
+        </motion.div>
+      )}
+
       {/* Won overlay */}
       <AnimatePresence>
         {myRank && phase === 'playing' && (
@@ -148,20 +171,6 @@ export default function BingoGrid({
           })
         )}
       </div>
-
-      {/* Your turn indicator */}
-      {isMyTurn && !disabled && phase === 'playing' && !myRank && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-4 text-center"
-        >
-          <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-full border border-green-500/30">
-            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-            <span className="text-green-400 font-medium">Your turn! Pick a number.</span>
-          </span>
-        </motion.div>
-      )}
     </div>
   );
 }
