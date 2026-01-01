@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Hash, ArrowRight, Sparkles, Edit2, Check, Plus, UserPlus, ChevronLeft } from 'lucide-react';
+import { Users, Hash, ArrowRight, Sparkles, Edit2, Check, Plus, UserPlus, ChevronLeft, Wifi, WifiOff, Loader2 } from 'lucide-react';
 
 type Mode = 'select' | 'create' | 'join';
+type BackendStatus = 'checking' | 'online' | 'offline';
 
 interface LobbyProps {
   onCreateRoom: (roomId: string, playerName: string, maxPlayers: number) => void;
@@ -18,6 +19,55 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error }: LobbyProps) {
   const [roomId, setRoomId] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [isEditingName, setIsEditingName] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
+
+  // Check backend status on mount (for Render free tier cold start)
+  useEffect(() => {
+    const checkBackendStatus = async () => {
+      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+      if (!socketUrl) {
+        // Local development - assume backend is always up
+        setBackendStatus('online');
+        return;
+      }
+
+      setBackendStatus('checking');
+      
+      try {
+        // Ping the backend to wake it up
+        const response = await fetch(`${socketUrl}/health`, {
+          method: 'GET',
+          mode: 'cors',
+        });
+        
+        if (response.ok) {
+          setBackendStatus('online');
+        } else {
+          setBackendStatus('offline');
+        }
+      } catch {
+        // If fetch fails, try a simple HEAD request or retry
+        try {
+          await fetch(socketUrl, { method: 'HEAD', mode: 'no-cors' });
+          // With no-cors we can't read the response, but if no error, server responded
+          setBackendStatus('online');
+        } catch {
+          setBackendStatus('offline');
+        }
+      }
+    };
+
+    checkBackendStatus();
+    
+    // Retry every 3 seconds if offline or checking
+    const interval = setInterval(() => {
+      if (backendStatus !== 'online') {
+        checkBackendStatus();
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [backendStatus]);
   const [hasSavedName, setHasSavedName] = useState(false);
 
   // Load saved name from localStorage on mount
@@ -364,6 +414,44 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error }: LobbyProps) {
               </p>
             </div>
           )}
+
+          {/* Backend Status Indicator */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="mt-4 sm:mt-5"
+          >
+            <div className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm ${
+              backendStatus === 'checking' 
+                ? 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-400'
+                : backendStatus === 'online'
+                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                : 'bg-red-500/10 border border-red-500/30 text-red-400'
+            }`}>
+              {backendStatus === 'checking' ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
+                  <span>Connecting to server...</span>
+                </>
+              ) : backendStatus === 'online' ? (
+                <>
+                  <Wifi className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span>Server online</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span>Server offline - retrying...</span>
+                </>
+              )}
+            </div>
+            {backendStatus === 'checking' && (
+              <p className="text-slate-500 text-xs text-center mt-2">
+                Free tier servers may take up to 30 seconds to wake up
+              </p>
+            )}
+          </motion.div>
         </motion.div>
       </motion.div>
     </div>

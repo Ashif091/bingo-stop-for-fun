@@ -14,6 +14,17 @@ const handle = app.getRequestHandler();
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url!, true);
+    
+    // Health check endpoint for backend status
+    if (parsedUrl.pathname === '/health') {
+      res.writeHead(200, { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end(JSON.stringify({ status: 'ok', timestamp: Date.now() }));
+      return;
+    }
+    
     handle(req, res, parsedUrl);
   });
 
