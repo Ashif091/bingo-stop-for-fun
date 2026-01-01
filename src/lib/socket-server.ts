@@ -1,0 +1,468 @@
+import { Server as SocketIOServer, Socket } from 'socket.io';
+import { 
+  GameState, 
+  Player, 
+  JoinRoomPayload, 
+  PlaceNumberPayload,
+  MarkNumberPayload,
+  SOCKET_EVENTS 
+} from '@/types/game';
+import { calculateCompletedLines } from './bingo-utils';
+
+// In-memory storage for rooms
+const rooms: Map<string, GameState> = new Map();
+
+// Track socket to room mapping for cleanup
+const socketToRoom: Map<string, string> = new Map();
+
+/**
+ * Create empty 5x5 grid (all zeros)
+ */
+function createEmptyGrid(): number[][] {
+  return Array.from({ length: 5 }, () => Array(5).fill(0));
+}
+
+/**
+ * Initialize Socket.io event handlers
+ */
+export function initializeSocketHandlers(io: SocketIOServer) {
+  io.on('connection', (socket: Socket) => {
+    console.log(`Client connected: ${socket.id}`);
+
+    // Handle joining a room
+    socket.on(SOCKET_EVENTS.JOIN_ROOM, (payload: JoinRoomPayload) => {
+      handleJoinRoom(io, socket, payload);
+    });
+
+    // Handle leaving a room
+    socket.on(SOCKET_EVENTS.LEAVE_ROOM, () => {
+      handleLeaveRoom(io, socket);
+    });
+
+    // Handle starting the arranging phase
+    socket.on(SOCKET_EVENTS.START_ARRANGING, (roomId: string) => {
+      handleStartArranging(io, socket, roomId);
+    });
+
+    // Handle placing a number during arrangement
+    socket.on(SOCKET_EVENTS.PLACE_NUMBER, (payload: PlaceNumberPayload) => {
+      handlePlaceNumber(io, socket, payload);
+    });
+
+    // Handle starting the game
+    socket.on(SOCKET_EVENTS.START_GAME, (roomId: string) => {
+      handleStartGame(io, socket, roomId);
+    });
+
+    // Handle marking a number
+    socket.on(SOCKET_EVENTS.MARK_NUMBER, (payload: MarkNumberPayload) => {
+      handleMarkNumber(io, socket, payload);
+    });
+
+    // Handle restarting the game
+    socket.on(SOCKET_EVENTS.RESTART_GAME, (roomId: string) => {
+      handleRestartGame(io, socket, roomId);
+    });
+
+    // Handle disconnect
+    socket.on('disconnect', () => {
+      console.log(`Client disconnected: ${socket.id}`);
+      handleLeaveRoom(io, socket);
+    });
+  });
+}
+
+function handleJoinRoom(io: SocketIOServer, socket: Socket, payload: JoinRoomPayload) {
+  const { roomId, playerName } = payload;
+
+  // Check if this socket already joined a room
+  if (socketToRoom.has(socket.id)) {
+    console.log(`Socket ${socket.id} already in a room, ignoring duplicate join`);
+    return;
+  }
+
+  // Get or create room
+  let gameState = rooms.get(roomId);
+  
+  if (!gameState) {
+    // Create new room
+    gameState = {
+      roomId,
+      players: [],
+      markedNumbers: [],
+      currentTurnIndex: 0,
+      phase: 'waiting',
+      winners: [],
+    };
+    rooms.set(roomId, gameState);
+  }
+
+  // Check if player with same socket id already exists
+  if (gameState.players.some(p => p.id === socket.id)) {
+    console.log(`Player ${socket.id} already in room, ignoring duplicate`);
+    return;
+  }
+
+  // Check if game is already playing (not waiting or arranging)
+  if (gameState.phase === 'playing' || gameState.phase === 'ended') {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Game is in progress. Please wait for the next game.' });
+    return;
+  }
+
+  // Check if room is full (max 10 players for bingo)
+  if (gameState.players.length >= 10) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room is full' });
+    return;
+  }
+
+  // Create new player
+  const player: Player = {
+    id: socket.id,
+    name: playerName,
+    grid: createEmptyGrid(),
+    completedLines: 0,
+    isReady: false,
+    currentPlacement: 1,
+  };
+
+  // Add player to game state
+  gameState.players.push(player);
+  
+  // Track socket to room mapping
+  socketToRoom.set(socket.id, roomId);
+
+  // Join socket room
+  socket.join(roomId);
+
+  // Notify the joining player
+  socket.emit(SOCKET_EVENTS.ROOM_JOINED, {
+    gameState,
+    playerId: socket.id,
+  });
+
+  // Notify other players in the room
+  socket.to(roomId).emit(SOCKET_EVENTS.PLAYER_JOINED, {
+    player,
+    players: gameState.players,
+  });
+
+  console.log(`Player ${playerName} joined room ${roomId}`);
+}
+
+function handleLeaveRoom(io: SocketIOServer, socket: Socket) {
+  const roomId = socketToRoom.get(socket.id);
+  if (!roomId) return;
+
+  const gameState = rooms.get(roomId);
+  if (!gameState) return;
+
+  // Remove player from game state
+  const playerIndex = gameState.players.findIndex(p => p.id === socket.id);
+  if (playerIndex === -1) return;
+
+  gameState.players.splice(playerIndex, 1);
+  socketToRoom.delete(socket.id);
+
+  // Leave socket room
+  socket.leave(roomId);
+
+  // If no players left, delete the room
+  if (gameState.players.length === 0) {
+    rooms.delete(roomId);
+    console.log(`Room ${roomId} deleted (no players)`);
+    return;
+  }
+
+  // Adjust current turn if needed
+  if (gameState.currentTurnIndex >= gameState.players.length) {
+    gameState.currentTurnIndex = 0;
+  }
+
+  // Notify remaining players
+  io.to(roomId).emit(SOCKET_EVENTS.PLAYER_LEFT, {
+    playerId: socket.id,
+    players: gameState.players,
+    currentTurnIndex: gameState.currentTurnIndex,
+  });
+
+  console.log(`Player ${socket.id} left room ${roomId}`);
+}
+
+function handleStartArranging(io: SocketIOServer, socket: Socket, roomId: string) {
+  const gameState = rooms.get(roomId);
+  if (!gameState) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room not found' });
+    return;
+  }
+
+  // Only host can start arranging
+  if (gameState.players[0]?.id !== socket.id) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only the host can start' });
+    return;
+  }
+
+  // Need at least 2 players
+  if (gameState.players.length < 2) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Need at least 2 players to start' });
+    return;
+  }
+
+  // Start arranging phase
+  gameState.phase = 'arranging';
+  
+  // Reset all players' grids and ready state
+  gameState.players.forEach(player => {
+    player.grid = createEmptyGrid();
+    player.isReady = false;
+    player.currentPlacement = 1;
+    player.completedLines = 0;
+    player.rank = undefined;
+  });
+
+  // Notify all players
+  io.to(roomId).emit(SOCKET_EVENTS.ARRANGING_STARTED, {
+    gameState,
+  });
+
+  console.log(`Arranging phase started in room ${roomId}`);
+}
+
+function handlePlaceNumber(io: SocketIOServer, socket: Socket, payload: PlaceNumberPayload) {
+  const { roomId, playerId, row, col } = payload;
+
+  const gameState = rooms.get(roomId);
+  if (!gameState) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room not found' });
+    return;
+  }
+
+  if (gameState.phase !== 'arranging') {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Not in arranging phase' });
+    return;
+  }
+
+  // Find the player
+  const player = gameState.players.find(p => p.id === playerId);
+  if (!player) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Player not found' });
+    return;
+  }
+
+  if (player.isReady) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Already ready' });
+    return;
+  }
+
+  // Validate cell is empty
+  if (player.grid[row][col] !== 0) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Cell is not empty' });
+    return;
+  }
+
+  // Place the number
+  player.grid[row][col] = player.currentPlacement;
+  player.currentPlacement++;
+
+  // Check if player is ready (placed all 25 numbers)
+  if (player.currentPlacement > 25) {
+    player.isReady = true;
+  }
+
+  // Notify all players about this placement
+  io.to(roomId).emit(SOCKET_EVENTS.NUMBER_PLACED, {
+    playerId,
+    row,
+    col,
+    number: player.grid[row][col],
+    currentPlacement: player.currentPlacement,
+    isReady: player.isReady,
+  });
+
+  // If player is now ready, also send player ready event
+  if (player.isReady) {
+    io.to(roomId).emit(SOCKET_EVENTS.PLAYER_READY, {
+      playerId,
+      players: gameState.players,
+    });
+    console.log(`Player ${player.name} is ready in room ${roomId}`);
+  }
+}
+
+function handleStartGame(io: SocketIOServer, socket: Socket, roomId: string) {
+  const gameState = rooms.get(roomId);
+  if (!gameState) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room not found' });
+    return;
+  }
+
+  // Only host can start the game
+  if (gameState.players[0]?.id !== socket.id) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only the host can start' });
+    return;
+  }
+
+  // Check all players are ready
+  const allReady = gameState.players.every(p => p.isReady);
+  if (!allReady) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'All players must be ready' });
+    return;
+  }
+
+  // Start the game
+  gameState.phase = 'playing';
+  gameState.currentTurnIndex = 0;
+  gameState.markedNumbers = [];
+  gameState.winners = [];
+
+  // Reset line counts
+  gameState.players.forEach(player => {
+    player.completedLines = 0;
+    player.rank = undefined;
+  });
+
+  // Notify all players
+  io.to(roomId).emit(SOCKET_EVENTS.GAME_STARTED, {
+    gameState,
+  });
+
+  console.log(`Game started in room ${roomId}`);
+}
+
+function handleMarkNumber(io: SocketIOServer, socket: Socket, payload: MarkNumberPayload) {
+  const { roomId, number, playerId } = payload;
+
+  const gameState = rooms.get(roomId);
+  if (!gameState) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room not found' });
+    return;
+  }
+
+  if (gameState.phase !== 'playing') {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Game not started' });
+    return;
+  }
+
+  // Check if it's this player's turn
+  const currentPlayer = gameState.players[gameState.currentTurnIndex];
+  if (currentPlayer.id !== playerId) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Not your turn' });
+    return;
+  }
+
+  // Check if number is valid
+  if (number < 1 || number > 25) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Invalid number' });
+    return;
+  }
+
+  // Check if number already marked
+  if (gameState.markedNumbers.includes(number)) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Number already marked' });
+    return;
+  }
+
+  // Mark the number
+  gameState.markedNumbers.push(number);
+
+  // Update completed lines for all players
+  gameState.players.forEach(player => {
+    player.completedLines = calculateCompletedLines(player.grid, gameState.markedNumbers);
+  });
+
+  // Check for new winners (first to 5 lines who isn't already a winner)
+  const maxWinners = gameState.players.length <= 2 ? 1 : 3;
+  
+  gameState.players.forEach(player => {
+    if (player.completedLines >= 5 && !player.rank && gameState.winners.length < maxWinners) {
+      player.rank = gameState.winners.length + 1;
+      gameState.winners.push({ ...player });
+      
+      // Notify about new winner
+      io.to(roomId).emit(SOCKET_EVENTS.PLAYER_WON, {
+        player,
+        rank: player.rank,
+      });
+      
+      console.log(`Player ${player.name} got ${getOrdinal(player.rank)} place in room ${roomId}!`);
+    }
+  });
+
+  // Move to next turn (skip winners)
+  do {
+    gameState.currentTurnIndex = (gameState.currentTurnIndex + 1) % gameState.players.length;
+  } while (gameState.players[gameState.currentTurnIndex].rank && 
+           gameState.winners.length < gameState.players.length);
+
+  // Check if game is over
+  const gameOver = gameState.winners.length >= maxWinners || 
+                   gameState.markedNumbers.length >= 25 ||
+                   gameState.winners.length >= gameState.players.length - 1;
+
+  if (gameOver) {
+    gameState.phase = 'ended';
+    
+    // Notify all players about the number marked first
+    io.to(roomId).emit(SOCKET_EVENTS.NUMBER_MARKED, {
+      number,
+      markedNumbers: gameState.markedNumbers,
+      currentTurnIndex: gameState.currentTurnIndex,
+      players: gameState.players, // All lines revealed now
+    });
+    
+    // Then notify game over with full reveal
+    io.to(roomId).emit(SOCKET_EVENTS.GAME_OVER, {
+      winners: gameState.winners,
+      players: gameState.players,
+    });
+
+    console.log(`Game ended in room ${roomId}!`);
+    return;
+  }
+
+  // Notify all players about the number marked
+  // Hide line counts from other players (they only see their own)
+  io.to(roomId).emit(SOCKET_EVENTS.NUMBER_MARKED, {
+    number,
+    markedNumbers: gameState.markedNumbers,
+    currentTurnIndex: gameState.currentTurnIndex,
+    players: gameState.players,
+  });
+
+  console.log(`Number ${number} marked in room ${roomId}`);
+}
+
+function handleRestartGame(io: SocketIOServer, socket: Socket, roomId: string) {
+  const gameState = rooms.get(roomId);
+  if (!gameState) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room not found' });
+    return;
+  }
+
+  // Reset to arranging phase
+  gameState.phase = 'arranging';
+  gameState.currentTurnIndex = 0;
+  gameState.markedNumbers = [];
+  gameState.winners = [];
+
+  // Reset all players
+  gameState.players.forEach(player => {
+    player.grid = createEmptyGrid();
+    player.isReady = false;
+    player.currentPlacement = 1;
+    player.completedLines = 0;
+    player.rank = undefined;
+  });
+
+  // Notify all players
+  io.to(roomId).emit(SOCKET_EVENTS.ARRANGING_STARTED, {
+    gameState,
+  });
+
+  console.log(`Game restarted in room ${roomId}`);
+}
+
+function getOrdinal(n: number): string {
+  const suffixes = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
+}

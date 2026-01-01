@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Disable turbopack warnings about root directory
+  experimental: {
+    // Using custom server with Socket.io
+  },
 };
 
 export default nextConfig;
