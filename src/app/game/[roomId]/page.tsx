@@ -234,6 +234,66 @@ export default function GamePage() {
                   {gameState.players.every(p => p.isReady) ? '🎮 Start Game!' : 'Waiting for all...'}
                 </motion.button>
               )}
+
+              {/* Mobile: Scoreboard during arranging */}
+              <div className="lg:hidden mt-3">
+                <button
+                  onClick={() => setShowScoreboard(!showScoreboard)}
+                  className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20 hover:from-yellow-500/15 hover:to-amber-500/15 transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-yellow-400" />
+                    <span className="text-sm font-medium text-yellow-400">Room Scoreboard</span>
+                    {Object.keys(gameState.scores).length > 0 && (
+                      <span className="text-xs text-yellow-400/60 ml-1">
+                        ({Object.keys(gameState.scores).length} player{Object.keys(gameState.scores).length !== 1 ? 's' : ''})
+                      </span>
+                    )}
+                  </div>
+                  {showScoreboard ? (
+                    <ChevronUp className="w-4 h-4 text-yellow-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-yellow-400" />
+                  )}
+                </button>
+                
+                <AnimatePresence>
+                  {showScoreboard && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-3 pt-2 space-y-1 bg-slate-800/30 rounded-b-xl border-x border-b border-yellow-500/20">
+                        {Object.keys(gameState.scores).length > 0 ? (
+                          Object.entries(gameState.scores)
+                            .sort(([, a], [, b]) => b - a)
+                            .map(([name, wins], idx) => (
+                              <div key={name} className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  {idx === 0 && <span>🥇</span>}
+                                  {idx === 1 && <span>🥈</span>}
+                                  {idx === 2 && <span>🥉</span>}
+                                  {idx > 2 && <span className="text-slate-500 w-5 text-center">{idx + 1}</span>}
+                                  <span className="text-white">{name}</span>
+                                  {name === myPlayer?.name && (
+                                    <span className="text-xs px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded">You</span>
+                                  )}
+                                </div>
+                                <span className="text-yellow-400 font-medium">{wins} win{wins !== 1 ? 's' : ''}</span>
+                              </div>
+                            ))
+                        ) : (
+                          <div className="text-center py-2 text-slate-400 text-sm">
+                            No wins yet. Play a game to start scoring!
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </motion.div>
 
             {/* Desktop: Sidebar */}
@@ -292,6 +352,66 @@ export default function GamePage() {
                   {gameState.players.every(p => p.isReady) ? '🎮 Start Game!' : 'Waiting for all to be ready...'}
                 </motion.button>
               )}
+
+              {/* Desktop: Room Scoreboard during arranging */}
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowScoreboard(!showScoreboard)}
+                  className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20 hover:from-yellow-500/15 hover:to-amber-500/15 transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-yellow-400" />
+                    <span className="text-sm font-medium text-yellow-400">Room Scoreboard</span>
+                    {Object.keys(gameState.scores).length > 0 && (
+                      <span className="text-xs text-yellow-400/60 ml-1">
+                        ({Object.keys(gameState.scores).length})
+                      </span>
+                    )}
+                  </div>
+                  {showScoreboard ? (
+                    <ChevronUp className="w-4 h-4 text-yellow-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-yellow-400" />
+                  )}
+                </button>
+                
+                <AnimatePresence>
+                  {showScoreboard && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-3 pt-2 space-y-1 bg-slate-800/30 rounded-b-xl border-x border-b border-yellow-500/20">
+                        {Object.keys(gameState.scores).length > 0 ? (
+                          Object.entries(gameState.scores)
+                            .sort(([, a], [, b]) => b - a)
+                            .map(([name, wins], idx) => (
+                              <div key={name} className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  {idx === 0 && <span>🥇</span>}
+                                  {idx === 1 && <span>🥈</span>}
+                                  {idx === 2 && <span>🥉</span>}
+                                  {idx > 2 && <span className="text-slate-500 w-5 text-center">{idx + 1}</span>}
+                                  <span className="text-white">{name}</span>
+                                  {name === myPlayer?.name && (
+                                    <span className="text-xs px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded">You</span>
+                                  )}
+                                </div>
+                                <span className="text-yellow-400 font-medium">{wins} win{wins !== 1 ? 's' : ''}</span>
+                              </div>
+                            ))
+                        ) : (
+                          <div className="text-center py-2 text-slate-400 text-sm">
+                            No wins yet. Play a game to start scoring!
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </motion.div>
           </div>
         </main>
@@ -414,37 +534,39 @@ export default function GamePage() {
               </div>
             )}
 
-            {/* Mobile: Scoreboard below grid */}
-            {Object.keys(gameState.scores).length > 0 && (
-              <div className="lg:hidden mt-3">
-                <button
-                  onClick={() => setShowScoreboard(!showScoreboard)}
-                  className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20 hover:from-yellow-500/15 hover:to-amber-500/15 transition-all"
-                >
-                  <div className="flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-yellow-400" />
-                    <span className="text-sm font-medium text-yellow-400">Room Scoreboard</span>
+            {/* Mobile: Scoreboard below grid - ALWAYS VISIBLE */}
+            <div className="lg:hidden mt-3">
+              <button
+                onClick={() => setShowScoreboard(!showScoreboard)}
+                className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20 hover:from-yellow-500/15 hover:to-amber-500/15 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-yellow-400" />
+                  <span className="text-sm font-medium text-yellow-400">Room Scoreboard</span>
+                  {Object.keys(gameState.scores).length > 0 && (
                     <span className="text-xs text-yellow-400/60 ml-1">
                       ({Object.keys(gameState.scores).length} player{Object.keys(gameState.scores).length !== 1 ? 's' : ''})
                     </span>
-                  </div>
-                  {showScoreboard ? (
-                    <ChevronUp className="w-4 h-4 text-yellow-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-yellow-400" />
                   )}
-                </button>
-                
-                <AnimatePresence>
-                  {showScoreboard && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="p-3 pt-2 space-y-1 bg-slate-800/30 rounded-b-xl border-x border-b border-yellow-500/20">
-                        {Object.entries(gameState.scores)
+                </div>
+                {showScoreboard ? (
+                  <ChevronUp className="w-4 h-4 text-yellow-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-yellow-400" />
+                )}
+              </button>
+              
+              <AnimatePresence>
+                {showScoreboard && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-3 pt-2 space-y-1 bg-slate-800/30 rounded-b-xl border-x border-b border-yellow-500/20">
+                      {Object.keys(gameState.scores).length > 0 ? (
+                        Object.entries(gameState.scores)
                           .sort(([, a], [, b]) => b - a)
                           .map(([name, wins], idx) => (
                             <div key={name} className="flex items-center justify-between text-sm">
@@ -452,6 +574,7 @@ export default function GamePage() {
                                 {idx === 0 && <span>🥇</span>}
                                 {idx === 1 && <span>🥈</span>}
                                 {idx === 2 && <span>🥉</span>}
+                                {idx > 2 && <span className="text-slate-500 w-5 text-center">{idx + 1}</span>}
                                 <span className="text-white">{name}</span>
                                 {name === myPlayer?.name && (
                                   <span className="text-xs px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded">You</span>
@@ -459,13 +582,17 @@ export default function GamePage() {
                               </div>
                               <span className="text-yellow-400 font-medium">{wins} win{wins !== 1 ? 's' : ''}</span>
                             </div>
-                          ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
+                          ))
+                      ) : (
+                        <div className="text-center py-2 text-slate-400 text-sm">
+                          No wins yet. Play a game to start scoring!
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
 
           {/* Desktop: Sidebar */}
@@ -510,37 +637,39 @@ export default function GamePage() {
               </div>
             )}
 
-            {/* Desktop: Room Scoreboard */}
-            {Object.keys(gameState.scores).length > 0 && (
-              <div className="mt-4">
-                <button
-                  onClick={() => setShowScoreboard(!showScoreboard)}
-                  className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20 hover:from-yellow-500/15 hover:to-amber-500/15 transition-all"
-                >
-                  <div className="flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-yellow-400" />
-                    <span className="text-sm font-medium text-yellow-400">Room Scoreboard</span>
+            {/* Desktop: Room Scoreboard - ALWAYS VISIBLE */}
+            <div className="mt-4">
+              <button
+                onClick={() => setShowScoreboard(!showScoreboard)}
+                className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 rounded-xl border border-yellow-500/20 hover:from-yellow-500/15 hover:to-amber-500/15 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-yellow-400" />
+                  <span className="text-sm font-medium text-yellow-400">Room Scoreboard</span>
+                  {Object.keys(gameState.scores).length > 0 && (
                     <span className="text-xs text-yellow-400/60 ml-1">
                       ({Object.keys(gameState.scores).length})
                     </span>
-                  </div>
-                  {showScoreboard ? (
-                    <ChevronUp className="w-4 h-4 text-yellow-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-yellow-400" />
                   )}
-                </button>
-                
-                <AnimatePresence>
-                  {showScoreboard && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="p-3 pt-2 space-y-1 bg-slate-800/30 rounded-b-xl border-x border-b border-yellow-500/20">
-                        {Object.entries(gameState.scores)
+                </div>
+                {showScoreboard ? (
+                  <ChevronUp className="w-4 h-4 text-yellow-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-yellow-400" />
+                )}
+              </button>
+              
+              <AnimatePresence>
+                {showScoreboard && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-3 pt-2 space-y-1 bg-slate-800/30 rounded-b-xl border-x border-b border-yellow-500/20">
+                      {Object.keys(gameState.scores).length > 0 ? (
+                        Object.entries(gameState.scores)
                           .sort(([, a], [, b]) => b - a)
                           .map(([name, wins], idx) => (
                             <div key={name} className="flex items-center justify-between text-sm">
@@ -548,6 +677,7 @@ export default function GamePage() {
                                 {idx === 0 && <span>🥇</span>}
                                 {idx === 1 && <span>🥈</span>}
                                 {idx === 2 && <span>🥉</span>}
+                                {idx > 2 && <span className="text-slate-500 w-5 text-center">{idx + 1}</span>}
                                 <span className="text-white">{name}</span>
                                 {name === myPlayer?.name && (
                                   <span className="text-xs px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded">You</span>
@@ -555,13 +685,17 @@ export default function GamePage() {
                               </div>
                               <span className="text-yellow-400 font-medium">{wins} win{wins !== 1 ? 's' : ''}</span>
                             </div>
-                          ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
+                          ))
+                      ) : (
+                        <div className="text-center py-2 text-slate-400 text-sm">
+                          No wins yet. Play a game to start scoring!
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
         </div>
       </main>
