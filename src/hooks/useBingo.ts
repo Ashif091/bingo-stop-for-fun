@@ -131,6 +131,11 @@ export function useBingo(): UseBingoReturn {
       setGameState(prev => prev ? { ...prev, players: payload.players } : null);
     });
 
+    socket.on(SOCKET_EVENTS.GAME_STARTING, (payload: GameStartedPayload) => {
+      setGameState(payload.gameState);
+      setError(null);
+    });
+
     socket.on(SOCKET_EVENTS.GAME_STARTED, (payload: GameStartedPayload) => {
       setGameState(payload.gameState);
       setError(null);
@@ -190,6 +195,7 @@ export function useBingo(): UseBingoReturn {
       socket.off(SOCKET_EVENTS.ARRANGING_STARTED);
       socket.off(SOCKET_EVENTS.NUMBER_PLACED);
       socket.off(SOCKET_EVENTS.PLAYER_READY);
+      socket.off(SOCKET_EVENTS.GAME_STARTING);
       socket.off(SOCKET_EVENTS.GAME_STARTED);
       socket.off(SOCKET_EVENTS.NUMBER_MARKED);
       socket.off(SOCKET_EVENTS.PLAYER_WON);

@@ -9,6 +9,8 @@ import GridArrangement from '@/components/GridArrangement';
 import PlayerList from '@/components/PlayerList';
 import WinnerModal from '@/components/WinnerModal';
 import WaitingRoom from '@/components/WaitingRoom';
+import HostNotification from '@/components/HostNotification';
+import StartingScreen from '@/components/StartingScreen';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Users, ChevronUp, ChevronDown, Trophy } from 'lucide-react';
 
@@ -18,6 +20,7 @@ export default function GamePage() {
   const roomId = params.roomId as string;
   const [showPlayers, setShowPlayers] = useState(false); // Mobile: toggle player list
   const [showScoreboard, setShowScoreboard] = useState(false); // Toggle scoreboard
+  const [showHostNotification, setShowHostNotification] = useState(false); // Host notification for all ready
 
   const {
     gameState,
@@ -88,6 +91,29 @@ export default function GamePage() {
     handleLeave();
   };
 
+  // Show host notification when all players are ready during arranging phase
+  const isHost = gameState?.players[0]?.id === playerId;
+  const allPlayersReady = gameState?.phase === 'arranging' && gameState?.players.every(p => p.isReady);
+  
+  useEffect(() => {
+    if (isHost && allPlayersReady && !showHostNotification) {
+      setShowHostNotification(true);
+    }
+    // Hide notification when phase changes
+    if (gameState?.phase !== 'arranging') {
+      setShowHostNotification(false);
+    }
+  }, [isHost, allPlayersReady, gameState?.phase, showHostNotification]);
+
+  const handleStartFromNotification = () => {
+    setShowHostNotification(false);
+    startGame();
+  };
+
+  const handleDismissNotification = () => {
+    setShowHostNotification(false);
+  };
+
   // Loading state
   if (!gameState || !playerId) {
     return (
@@ -118,6 +144,19 @@ export default function GamePage() {
     );
   }
 
+  // Starting phase - show countdown screen
+  if (gameState.phase === 'starting') {
+    return (
+      <StartingScreen
+        onComplete={() => {
+          // The server will emit GAME_STARTED after the countdown
+          // This is just a fallback in case of timing issues
+        }}
+        countdownSeconds={3}
+      />
+    );
+  }
+
   // Arranging phase - show grid arrangement with player list
   if (gameState.phase === 'arranging' && myPlayer) {
     return (
@@ -127,6 +166,13 @@ export default function GamePage() {
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
         </div>
+
+        {/* Host Notification */}
+        <HostNotification
+          isVisible={showHostNotification}
+          onStartGame={handleStartFromNotification}
+          onDismiss={handleDismissNotification}
+        />
 
         {/* Header */}
         <GameHeader

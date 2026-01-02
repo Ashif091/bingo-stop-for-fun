@@ -1,5 +1,5 @@
 // Game phases
-export type GamePhase = 'waiting' | 'arranging' | 'playing' | 'ended';
+export type GamePhase = 'waiting' | 'arranging' | 'starting' | 'playing' | 'ended';
 
 // Player interface
 export interface Player {
@@ -126,6 +126,7 @@ export const SOCKET_EVENTS = {
   ARRANGING_STARTED: 'arranging-started',
   NUMBER_PLACED: 'number-placed',
   PLAYER_READY: 'player-ready',
+  GAME_STARTING: 'game-starting',
   GAME_STARTED: 'game-started',
   NUMBER_MARKED: 'number-marked',
   PLAYER_WON: 'player-won',

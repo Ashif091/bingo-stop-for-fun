@@ -219,6 +219,7 @@ function handleLeaveRoom(io: SocketIOServer, socket: Socket) {
   const playerIndex = gameState.players.findIndex(p => p.id === socket.id);
   if (playerIndex === -1) return;
 
+  const leavingPlayer = gameState.players[playerIndex];
   gameState.players.splice(playerIndex, 1);
   socketToRoom.delete(socket.id);
 
@@ -235,6 +236,47 @@ function handleLeaveRoom(io: SocketIOServer, socket: Socket) {
   // Adjust current turn if needed
   if (gameState.currentTurnIndex >= gameState.players.length) {
     gameState.currentTurnIndex = 0;
+  }
+
+  // Check for auto-win: if only 1 player left during gameplay, they win automatically
+  if ((gameState.phase === 'playing' || gameState.phase === 'starting') && gameState.players.length === 1) {
+    const lastPlayer = gameState.players[0];
+    
+    // Don't auto-win if the last player has already won
+    if (!lastPlayer.rank) {
+      lastPlayer.rank = 1;
+      gameState.winners = [{ ...lastPlayer }];
+      gameState.phase = 'ended';
+      
+      // Update scoreboard
+      if (!gameState.scores[lastPlayer.name]) {
+        gameState.scores[lastPlayer.name] = 0;
+      }
+      gameState.scores[lastPlayer.name]++;
+      
+      // Notify about player leaving first
+      io.to(roomId).emit(SOCKET_EVENTS.PLAYER_LEFT, {
+        playerId: socket.id,
+        players: gameState.players,
+        currentTurnIndex: gameState.currentTurnIndex,
+      });
+      
+      // Then notify about the auto-win
+      io.to(roomId).emit(SOCKET_EVENTS.PLAYER_WON, {
+        player: lastPlayer,
+        rank: 1,
+      });
+      
+      // Finally emit game over
+      io.to(roomId).emit(SOCKET_EVENTS.GAME_OVER, {
+        winners: gameState.winners,
+        players: gameState.players,
+        scores: gameState.scores,
+      });
+      
+      console.log(`Player ${lastPlayer.name} auto-won in room ${roomId} (last player standing)`);
+      return;
+    }
   }
 
   // Notify remaining players
@@ -429,8 +471,8 @@ function handleStartGame(io: SocketIOServer, socket: Socket, roomId: string) {
     return;
   }
 
-  // Start the game
-  gameState.phase = 'playing';
+  // Set phase to 'starting' for countdown screen
+  gameState.phase = 'starting';
   gameState.currentTurnIndex = 0;
   gameState.markedNumbers = [];
   gameState.winners = [];
@@ -441,12 +483,28 @@ function handleStartGame(io: SocketIOServer, socket: Socket, roomId: string) {
     player.rank = undefined;
   });
 
-  // Notify all players
-  io.to(roomId).emit(SOCKET_EVENTS.GAME_STARTED, {
+  // Emit GAME_STARTING for countdown screen (3 seconds countdown + 1 second for "GO!")
+  io.to(roomId).emit(SOCKET_EVENTS.GAME_STARTING, {
     gameState,
+    countdownSeconds: 3,
   });
 
-  console.log(`Game started in room ${roomId}`);
+  console.log(`Game starting countdown in room ${roomId}`);
+
+  // After countdown (3s + 1s buffer), start the actual game
+  setTimeout(() => {
+    const currentState = rooms.get(roomId);
+    if (currentState && currentState.phase === 'starting') {
+      currentState.phase = 'playing';
+      
+      // Notify all players that the game has actually started
+      io.to(roomId).emit(SOCKET_EVENTS.GAME_STARTED, {
+        gameState: currentState,
+      });
+      
+      console.log(`Game started in room ${roomId}`);
+    }
+  }, 4000); // 3s countdown + 1s for "GO!" display
 }
 
 function handleMarkNumber(io: SocketIOServer, socket: Socket, payload: MarkNumberPayload) {
