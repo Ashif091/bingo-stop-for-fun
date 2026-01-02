@@ -3,9 +3,10 @@ import type { NextConfig } from "next";
 import withPWA from "next-pwa";
 
 const nextConfig: NextConfig = {
-  // Disable turbopack warnings about root directory
-  experimental: {
-    // Using custom server with Socket.io
+  // Use webpack instead of Turbopack for compatibility with next-pwa
+  // This is empty but forces Next.js to use webpack
+  webpack: (config) => {
+    return config;
   },
 };
 
