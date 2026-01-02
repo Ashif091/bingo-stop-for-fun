@@ -53,8 +53,7 @@ Thumbs.db
 logs/
 *.log
 
-# PWA generated files
-/public/sw.js
+# PWA auto-generated files (if using next-pwa plugin)
 /public/sw.js.map
 /public/workbox-*.js
 /public/workbox-*.js.map
