@@ -459,7 +459,7 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error }: LobbyProps) {
             </div>
             {backendStatus === 'checking' && (
               <p className="text-slate-500 text-xs text-center mt-2">
-                Free tier servers may take up to 30 seconds to wake up
+                Server restarting, may take a few minutes...
               </p>
             )}
           </motion.div>

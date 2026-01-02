@@ -24,6 +24,30 @@ function createEmptyGrid(): number[][] {
 }
 
 /**
+ * Calculate score points based on rank and number of players
+ * - 2 players: 1st = 1 point
+ * - 3 players: 1st = 2 points, 2nd = 1 point
+ * - 4+ players: 1st = 3 points, 2nd = 2 points, 3rd = 1 point
+ */
+function calculateScoreForRank(rank: number, totalPlayers: number): number {
+  if (totalPlayers === 2) {
+    // Only 1 winner, gets 1 point
+    return rank === 1 ? 1 : 0;
+  } else if (totalPlayers === 3) {
+    // 2 winners: 1st = 2, 2nd = 1
+    if (rank === 1) return 2;
+    if (rank === 2) return 1;
+    return 0;
+  } else {
+    // 4+ players: 3 winners: 1st = 3, 2nd = 2, 3rd = 1
+    if (rank === 1) return 3;
+    if (rank === 2) return 2;
+    if (rank === 3) return 1;
+    return 0;
+  }
+}
+
+/**
  * Initialize Socket.io event handlers
  */
 export function initializeSocketHandlers(io: SocketIOServer) {
@@ -248,11 +272,12 @@ function handleLeaveRoom(io: SocketIOServer, socket: Socket) {
       gameState.winners = [{ ...lastPlayer }];
       gameState.phase = 'ended';
       
-      // Update scoreboard
+      // Update scoreboard with proper score based on rank
+      const scoreToAdd = calculateScoreForRank(1, gameState.players.length + 1); // +1 because leaving player is already removed
       if (!gameState.scores[lastPlayer.name]) {
         gameState.scores[lastPlayer.name] = 0;
       }
-      gameState.scores[lastPlayer.name]++;
+      gameState.scores[lastPlayer.name] += scoreToAdd;
       
       // Notify about player leaving first
       io.to(roomId).emit(SOCKET_EVENTS.PLAYER_LEFT, {
@@ -576,11 +601,12 @@ function handleMarkNumber(io: SocketIOServer, socket: Socket, payload: MarkNumbe
       player.rank = gameState.winners.length + 1;
       gameState.winners.push({ ...player });
       
-      // *** UPDATE SCOREBOARD ***
+      // *** UPDATE SCOREBOARD with proper score based on rank ***
+      const scoreToAdd = calculateScoreForRank(player.rank, gameState.players.length);
       if (!gameState.scores[player.name]) {
         gameState.scores[player.name] = 0;
       }
-      gameState.scores[player.name]++;
+      gameState.scores[player.name] += scoreToAdd;
       
       // Notify about new winner
       io.to(roomId).emit(SOCKET_EVENTS.PLAYER_WON, {
@@ -643,27 +669,46 @@ function handleRestartGame(io: SocketIOServer, socket: Socket, roomId: string) {
     return;
   }
 
-  // Reset to arranging phase
-  gameState.phase = 'arranging';
-  gameState.currentTurnIndex = 0;
-  gameState.markedNumbers = [];
-  gameState.winners = [];
+  // Find the player who clicked "Play Again"
+  const player = gameState.players.find(p => p.id === socket.id);
+  if (!player) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Player not found' });
+    return;
+  }
 
-  // Reset all players (but keep scores!)
-  gameState.players.forEach(player => {
-    player.grid = createEmptyGrid();
-    player.isReady = false;
-    player.currentPlacement = 1;
-    player.completedLines = 0;
-    player.rank = undefined;
-  });
+  // Reset only THIS player's state (not everyone)
+  player.grid = createEmptyGrid();
+  player.isReady = false;
+  player.currentPlacement = 1;
+  player.completedLines = 0;
+  player.rank = undefined;
 
-  // Notify all players
-  io.to(roomId).emit(SOCKET_EVENTS.ARRANGING_STARTED, {
-    gameState,
-  });
+  // Check if ALL players have clicked "Play Again" (all have rank = undefined now)
+  const allPlayersReady = gameState.players.every(p => p.rank === undefined);
 
-  console.log(`Game restarted in room ${roomId}`);
+  if (allPlayersReady) {
+    // Everyone has clicked Play Again, start arranging phase
+    gameState.phase = 'arranging';
+    gameState.currentTurnIndex = 0;
+    gameState.markedNumbers = [];
+    gameState.winners = [];
+
+    // Notify all players to start arranging
+    io.to(roomId).emit(SOCKET_EVENTS.ARRANGING_STARTED, {
+      gameState,
+    });
+
+    console.log(`All players ready, game restarted in room ${roomId}`);
+  } else {
+    // Only this player is ready, notify everyone about the update
+    // This player will see arranging screen, others still see winner modal
+    io.to(roomId).emit(SOCKET_EVENTS.PLAYER_READY_FOR_NEXT, {
+      playerId: socket.id,
+      players: gameState.players,
+    });
+
+    console.log(`Player ${player.name} ready for next game in room ${roomId}`);
+  }
 }
 
 function getOrdinal(n: number): string {

@@ -216,7 +216,7 @@ export default function WinnerModal({
                   className="flex-1 py-3 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-all"
                 >
                   <Home className="w-5 h-5" />
-                  Home
+                  Exit Room
                 </motion.button>
               </motion.div>
             </div>

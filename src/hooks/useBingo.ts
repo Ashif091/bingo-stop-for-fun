@@ -171,6 +171,11 @@ export function useBingo(): UseBingoReturn {
       } : null);
     });
 
+    // When a player clicks "Play Again", update their state
+    socket.on(SOCKET_EVENTS.PLAYER_READY_FOR_NEXT, (payload: { playerId: string; players: Player[] }) => {
+      setGameState(prev => prev ? { ...prev, players: payload.players } : null);
+    });
+
     socket.on(SOCKET_EVENTS.ERROR, (payload: ErrorPayload) => {
       setError(payload.message);
     });
@@ -200,6 +205,7 @@ export function useBingo(): UseBingoReturn {
       socket.off(SOCKET_EVENTS.NUMBER_MARKED);
       socket.off(SOCKET_EVENTS.PLAYER_WON);
       socket.off(SOCKET_EVENTS.GAME_OVER);
+      socket.off(SOCKET_EVENTS.PLAYER_READY_FOR_NEXT);
       socket.off(SOCKET_EVENTS.ERROR);
     };
   }, []);

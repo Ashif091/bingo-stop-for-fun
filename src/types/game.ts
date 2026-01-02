@@ -131,5 +131,6 @@ export const SOCKET_EVENTS = {
   NUMBER_MARKED: 'number-marked',
   PLAYER_WON: 'player-won',
   GAME_OVER: 'game-over',
+  PLAYER_READY_FOR_NEXT: 'player-ready-for-next',
   ERROR: 'error',
 } as const;

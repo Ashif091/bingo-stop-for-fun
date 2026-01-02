@@ -746,15 +746,48 @@ export default function GamePage() {
         </div>
       </main>
 
-      {/* Winner Modal */}
+      {/* Winner Modal or Waiting Screen */}
       {gameState.phase === 'ended' && (
-        <WinnerModal
-          winners={gameState.winners}
-          players={gameState.players}
-          myPlayerId={playerId}
-          onPlayAgain={handlePlayAgain}
-          onGoHome={handleGoHome}
-        />
+        myPlayer?.rank === undefined ? (
+          // Player has clicked "Play Again" - show waiting screen
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-3xl border border-slate-700/50 p-8 shadow-2xl text-center max-w-md"
+            >
+              <Loader2 className="w-12 h-12 text-purple-400 animate-spin mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-white mb-2">Waiting for Others</h2>
+              <p className="text-slate-400 mb-4">
+                Waiting for other players to click Play Again...
+              </p>
+              <div className="space-y-2 text-sm">
+                {gameState.players.map((player, index) => (
+                  <div
+                    key={player.id}
+                    className={`flex items-center justify-between p-2 rounded-lg ${
+                      player.rank === undefined ? 'bg-green-500/10' : 'bg-slate-700/30'
+                    }`}
+                  >
+                    <span className="text-white">{player.name}</span>
+                    <span className={player.rank === undefined ? 'text-green-400' : 'text-slate-500'}>
+                      {player.rank === undefined ? '✓ Ready' : 'Viewing results...'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        ) : (
+          // Player hasn't clicked Play Again yet - show winner modal
+          <WinnerModal
+            winners={gameState.winners}
+            players={gameState.players}
+            myPlayerId={playerId}
+            onPlayAgain={handlePlayAgain}
+            onGoHome={handleGoHome}
+          />
+        )
       )}
     </div>
   );
