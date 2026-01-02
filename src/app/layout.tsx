@@ -13,10 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BINGO - Multiplayer 1-25 Game",
-  description: "Real-time multiplayer Bingo game. First to complete 5 lines wins!",
+  title: "BINGO-STOP",
+  description: "Real-time multiplayer Bingo stop game. First to complete 5 lines wins!",
   icons: {
-    icon: '/favicon.ico',
+    icon: '/bingo-logo.svg',
   },
 };
 
