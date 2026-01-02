@@ -683,8 +683,9 @@ function handleRestartGame(io: SocketIOServer, socket: Socket, roomId: string) {
   player.completedLines = 0;
   player.rank = undefined;
 
-  // Check if ALL players have clicked "Play Again" (all have rank = undefined now)
-  const allPlayersReady = gameState.players.every(p => p.rank === undefined);
+  // Check if ALL players have clicked "Play Again" (all have currentPlacement reset to 1)
+  // We use currentPlacement because losers also have rank = undefined
+  const allPlayersReady = gameState.players.every(p => p.currentPlacement === 1);
 
   if (allPlayersReady) {
     // Everyone has clicked Play Again, start arranging phase
