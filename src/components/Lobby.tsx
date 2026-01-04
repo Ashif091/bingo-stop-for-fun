@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Hash, ArrowRight, Sparkles, Edit2, Check, Plus, UserPlus, ChevronLeft, Wifi, WifiOff, Loader2 } from 'lucide-react';
+import FullscreenButton from './FullscreenButton';
 
 type Mode = 'select' | 'create' | 'join';
 type BackendStatus = 'checking' | 'online' | 'offline';
@@ -131,6 +132,9 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error }: LobbyProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
+      {/* Fullscreen Button - only on landing page */}
+      <FullscreenButton />
+
       {/* Background effects */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
