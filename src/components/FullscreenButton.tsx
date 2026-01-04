@@ -6,9 +6,10 @@ import { Maximize2, Minimize2, X } from 'lucide-react';
 
 interface FullscreenButtonProps {
   showNotification?: boolean;
+  showButton?: boolean;
 }
 
-export default function FullscreenButton({ showNotification = true }: FullscreenButtonProps) {
+export default function FullscreenButton({ showNotification = true, showButton = true }: FullscreenButtonProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
@@ -71,6 +72,8 @@ export default function FullscreenButton({ showNotification = true }: Fullscreen
 
   // Listen for fullscreen changes
   useEffect(() => {
+    if (!isMounted) return;
+
     const events = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'];
     
     events.forEach(event => {
@@ -84,7 +87,7 @@ export default function FullscreenButton({ showNotification = true }: Fullscreen
         document.removeEventListener(event, updateFullscreenState);
       });
     };
-  }, [updateFullscreenState]);
+  }, [isMounted, updateFullscreenState]);
 
   // Show notification after a delay if not in fullscreen and hasn't interacted
   useEffect(() => {
@@ -123,23 +126,25 @@ export default function FullscreenButton({ showNotification = true }: Fullscreen
 
   return (
     <>
-      {/* Fullscreen Toggle Button - Fixed at top right */}
-      <motion.button
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={toggleFullscreen}
-        className="fixed top-3 right-3 z-50 p-2 bg-slate-800/80 backdrop-blur-sm border border-slate-700/50 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700/80 transition-all shadow-lg"
-        title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-        aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-      >
-        {isFullscreen ? (
-          <Minimize2 className="w-4 h-4" />
-        ) : (
-          <Maximize2 className="w-4 h-4" />
-        )}
-      </motion.button>
+      {/* Fullscreen Toggle Button - only shown if showButton is true */}
+      {showButton && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={toggleFullscreen}
+          className="fixed top-3 right-3 z-50 p-2 bg-slate-800/80 backdrop-blur-sm border border-slate-700/50 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700/80 transition-all shadow-lg"
+          title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+          aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+        >
+          {isFullscreen ? (
+            <Minimize2 className="w-4 h-4" />
+          ) : (
+            <Maximize2 className="w-4 h-4" />
+          )}
+        </motion.button>
+      )}
 
       {/* Fullscreen Notification Prompt */}
       <AnimatePresence>
@@ -148,7 +153,7 @@ export default function FullscreenButton({ showNotification = true }: Fullscreen
             initial={{ opacity: 0, y: -50, x: '-50%' }}
             animate={{ opacity: 1, y: 0, x: '-50%' }}
             exit={{ opacity: 0, y: -50, x: '-50%' }}
-            className="fixed top-14 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm"
+            className="fixed top-16 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm"
           >
             <div className="bg-gradient-to-r from-purple-900/95 to-blue-900/95 backdrop-blur-xl border border-purple-500/30 rounded-xl p-4 shadow-2xl shadow-purple-500/20">
               <div className="flex items-start gap-3">

@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Hash, LogOut, Users, Wifi, WifiOff } from 'lucide-react';
+import { Hash, LogOut, Users, Wifi, WifiOff, Maximize2, Minimize2 } from 'lucide-react';
 
 interface GameHeaderProps {
   roomId: string;
@@ -11,6 +12,81 @@ interface GameHeaderProps {
 }
 
 export default function GameHeader({ roomId, playerCount, isConnected, onLeave }: GameHeaderProps) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [isFullscreenSupported, setIsFullscreenSupported] = useState(false);
+
+  // Check if fullscreen is supported after mount
+  useEffect(() => {
+    setIsMounted(true);
+    const supported = 
+      document.fullscreenEnabled || 
+      !!(document as unknown as { webkitFullscreenEnabled?: boolean }).webkitFullscreenEnabled ||
+      !!(document as unknown as { mozFullScreenEnabled?: boolean }).mozFullScreenEnabled ||
+      !!(document as unknown as { msFullscreenEnabled?: boolean }).msFullscreenEnabled;
+    setIsFullscreenSupported(supported);
+  }, []);
+
+  // Update fullscreen state
+  const updateFullscreenState = useCallback(() => {
+    const fullscreenElement = 
+      document.fullscreenElement ||
+      (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement ||
+      (document as unknown as { mozFullScreenElement?: Element }).mozFullScreenElement ||
+      (document as unknown as { msFullscreenElement?: Element }).msFullscreenElement;
+    
+    setIsFullscreen(!!fullscreenElement);
+  }, []);
+
+  // Toggle fullscreen
+  const toggleFullscreen = async () => {
+    try {
+      if (!isFullscreen) {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if ((elem as unknown as { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen) {
+          await (elem as unknown as { webkitRequestFullscreen: () => Promise<void> }).webkitRequestFullscreen();
+        } else if ((elem as unknown as { mozRequestFullScreen?: () => Promise<void> }).mozRequestFullScreen) {
+          await (elem as unknown as { mozRequestFullScreen: () => Promise<void> }).mozRequestFullScreen();
+        } else if ((elem as unknown as { msRequestFullscreen?: () => Promise<void> }).msRequestFullscreen) {
+          await (elem as unknown as { msRequestFullscreen: () => Promise<void> }).msRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as unknown as { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen) {
+          await (document as unknown as { webkitExitFullscreen: () => Promise<void> }).webkitExitFullscreen();
+        } else if ((document as unknown as { mozCancelFullScreen?: () => Promise<void> }).mozCancelFullScreen) {
+          await (document as unknown as { mozCancelFullScreen: () => Promise<void> }).mozCancelFullScreen();
+        } else if ((document as unknown as { msExitFullscreen?: () => Promise<void> }).msExitFullscreen) {
+          await (document as unknown as { msExitFullscreen: () => Promise<void> }).msExitFullscreen();
+        }
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error);
+    }
+  };
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const events = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'];
+    
+    events.forEach(event => {
+      document.addEventListener(event, updateFullscreenState);
+    });
+
+    updateFullscreenState();
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, updateFullscreenState);
+      });
+    };
+  }, [isMounted, updateFullscreenState]);
+
   return (
     <motion.header
       initial={{ opacity: 0, y: -20 }}
@@ -33,7 +109,25 @@ export default function GameHeader({ roomId, playerCount, isConnected, onLeave }
           </div>
 
           {/* Right side */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Fullscreen button */}
+            {isMounted && isFullscreenSupported && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={toggleFullscreen}
+                className="p-2 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 rounded-lg text-slate-300 hover:text-white transition-all"
+                title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+                aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="w-4 h-4" />
+                ) : (
+                  <Maximize2 className="w-4 h-4" />
+                )}
+              </motion.button>
+            )}
+
             {/* Connection status */}
             <div className={`
               flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium
@@ -80,3 +174,4 @@ export default function GameHeader({ roomId, playerCount, isConnected, onLeave }
     </motion.header>
   );
 }
+
